@@ -10,6 +10,10 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.ViewGroup
@@ -130,11 +134,14 @@ class MainActivity : Activity() {
     private lateinit var modeSpinner: Spinner
     private lateinit var countText: TextView
     private lateinit var detailText: TextView
+    private lateinit var feedbackLight: TextView
+    private var toneGenerator: ToneGenerator? = null
     private var products: List<Product> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         db = InventoryDb(this)
+        toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90)
         buildUi()
         refresh()
     }
@@ -170,7 +177,9 @@ class MainActivity : Activity() {
         }
         root.addView(countText, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 })
         productSpinner = Spinner(this)
-        root.addView(productSpinner, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 })
+        productSpinner.minimumHeight = 204
+        productSpinner.setPadding(16, 20, 16, 20)
+        root.addView(productSpinner, LinearLayout.LayoutParams(-1, 204).apply { bottomMargin = 8 })
         modeSpinner = Spinner(this)
         modeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("ورود به انبار", "خروج از انبار")).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -181,7 +190,6 @@ class MainActivity : Activity() {
 
         addButton(root, "＋ ثبت محصول", 0xFF526B3C.toInt()) { addProductDialog() }
         addButton(root, "− حذف محصول", 0xFF9B3D36.toInt()) { deleteProductDialog() }
-        addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
         addButton(root, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
         addButton(root, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
         addButton(root, "▤ خروجی PDF", 0xFF8A6533.toInt()) { exportPdf() }
@@ -202,24 +210,34 @@ class MainActivity : Activity() {
             setPadding(0, 8, 0, 0)
         }
         root.addView(note)
+        feedbackLight = TextView(this).apply {
+            text = "آماده اسکن"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFFFFF.toInt())
+            setPadding(8, 5, 8, 5)
+            setBackgroundColor(0xFF607D8B.toInt())
+        }
+        root.addView(feedbackLight, LinearLayout.LayoutParams(-1, 38).apply { topMargin = 6; bottomMargin = 6 })
+        addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt(), 96) { startScan() }
         setContentView(root)
     }
 
-    private fun addButton(root: LinearLayout, label: String, color: Int, action: () -> Unit) {
+    private fun addButton(root: LinearLayout, label: String, color: Int, height: Int = 68, action: () -> Unit) {
         val b = Button(this).apply {
             text = label
             textSize = 17f
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             isAllCaps = false
-            minHeight = 68
-            minimumHeight = 68
+            minHeight = height
+            minimumHeight = height
             gravity = Gravity.CENTER
             setPadding(12, 8, 12, 8)
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(color))
             setOnClickListener { action() }
         }
-        root.addView(b, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 8 })
+        root.addView(b, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = 8 })
     }
 
     private fun showInventoryTable() {
@@ -314,7 +332,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle(if (isIncoming()) "ثبت دستی ورود" else "ثبت دستی خروج")
             .setView(input).setNegativeButton("لغو", null)
             .setPositiveButton("ثبت") { _, _ ->
-                toast(db.record(product.id, input.text.toString(), isIncoming()))
+                showRecordFeedback(db.record(product.id, input.text.toString(), isIncoming()))
                 refresh()
             }.show()
     }
@@ -340,12 +358,26 @@ class MainActivity : Activity() {
         if (result != null) {
             if (result.contents != null) {
                 val p = selectedProduct()
-                if (p != null) toast(db.record(p.id, result.contents, isIncoming()))
+                if (p != null) showRecordFeedback(db.record(p.id, result.contents, isIncoming()))
                 refresh()
             }
             return
         }
         super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun showRecordFeedback(message: String) {
+        val success = message == "ورود کالا ثبت شد." || message == "خروج کالا ثبت شد."
+        feedbackLight.text = if (success) "✓ ثبت موفق" else "✕ خطا: $message"
+        feedbackLight.setBackgroundColor(if (success) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
+        toneGenerator?.startTone(if (success) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 250)
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (::feedbackLight.isInitialized) {
+                feedbackLight.text = "آماده اسکن"
+                feedbackLight.setBackgroundColor(0xFF607D8B.toInt())
+            }
+        }, 1000)
     }
 
     private fun refresh() {
@@ -354,9 +386,9 @@ class MainActivity : Activity() {
             if (products.isEmpty()) listOf("ابتدا محصول اضافه کنید") else products.map { it.name }).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        productSpinner.minimumHeight = 68
-        productSpinner.setPadding(12, 6, 12, 6)
-        productSpinner.layoutParams = LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 8 }
+        productSpinner.minimumHeight = 204
+        productSpinner.setPadding(16, 20, 16, 20)
+        productSpinner.layoutParams = LinearLayout.LayoutParams(-1, 204).apply { bottomMargin = 8 }
         countText.text = "موجودی کل: ${db.totalCount()} سریال"
         detailText.text = if (products.isEmpty()) {
             "برای شروع، نوع محصول را اضافه کنید.\n\nهر سریال فقط یک‌بار در موجودی ثبت می‌شود و ورود و خروج آن در تاریخچه ذخیره می‌شود."
@@ -490,6 +522,12 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         } catch (_: Exception) { /* File is saved even if no viewer is installed. */ }
+    }
+
+    override fun onDestroy() {
+        toneGenerator?.release()
+        toneGenerator = null
+        super.onDestroy()
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
