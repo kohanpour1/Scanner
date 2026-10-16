@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
+        android:icon="@drawable/scanner_logo"
         android:allowBackup="true"
         android:label="مدیریت انبار Scanner"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
