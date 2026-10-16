@@ -147,8 +147,14 @@ class MainActivity : Activity() {
             layoutDirection = ViewGroup.LAYOUT_DIRECTION_RTL
             setBackgroundColor(0xFFF6F7F4.toInt())
         }
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.scanner_logo)
+            contentDescription = "لوگوی اپلیکیشن اسکنر"
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        root.addView(logo, LinearLayout.LayoutParams(76, 76).apply { gravity = Gravity.CENTER; bottomMargin = 4 })
         val title = TextView(this).apply {
-            text = "مدیریت انبار Scanner"
+            text = "اسکنر | مدیریت انبار"
             textSize = 24f
             setTextColor(0xFF34513A.toInt())
             gravity = Gravity.CENTER
