@@ -152,9 +152,9 @@ class MainActivity : Activity() {
         modeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("ورود به انبار", "خروج از انبار")).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        modeSpinner.minimumHeight = 60
+        modeSpinner.minimumHeight = 68
         modeSpinner.setPadding(12, 6, 12, 6)
-        root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 12 })
+        root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 12 })
 
         addButton(root, "＋ افزودن نوع محصول (حداکثر ۵)", 0xFF526B3C.toInt()) { addProductDialog() }
         addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
@@ -183,17 +183,18 @@ class MainActivity : Activity() {
     private fun addButton(root: LinearLayout, label: String, color: Int, action: () -> Unit) {
         val b = Button(this).apply {
             text = label
-            textSize = 16f
+            textSize = 17f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             isAllCaps = false
-            minHeight = 60
-            minimumHeight = 60
+            minHeight = 68
+            minimumHeight = 68
             gravity = Gravity.CENTER
             setPadding(12, 8, 12, 8)
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(color))
             setOnClickListener { action() }
         }
-        root.addView(b, LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 8 })
+        root.addView(b, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 8 })
     }
 
     private fun addProductDialog() {
@@ -266,9 +267,9 @@ class MainActivity : Activity() {
             if (products.isEmpty()) listOf("ابتدا محصول اضافه کنید") else products.map { it.name }).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        productSpinner.minimumHeight = 60
+        productSpinner.minimumHeight = 68
         productSpinner.setPadding(12, 6, 12, 6)
-        productSpinner.layoutParams = LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 8 }
+        productSpinner.layoutParams = LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 8 }
         countText.text = "موجودی کل: ${db.totalCount()} سریال"
         detailText.text = if (products.isEmpty()) {
             "برای شروع، نوع محصول را اضافه کنید.\n\nهر سریال فقط یک‌بار در موجودی ثبت می‌شود و ورود و خروج آن در تاریخچه ذخیره می‌شود."
