@@ -149,17 +149,22 @@ class MainActivity : Activity() {
     private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 16, 18, 18)
+            setPadding(14, 8, 14, 10)
             layoutParams = ViewGroup.LayoutParams(-1, -1)
             layoutDirection = ViewGroup.LAYOUT_DIRECTION_RTL
             setBackgroundColor(0xFFF6F7F4.toInt())
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(4, 8, 4, 8)
+            layoutDirection = ViewGroup.LAYOUT_DIRECTION_RTL
         }
         val logo = ImageView(this).apply {
             setImageResource(R.drawable.scanner_logo)
             contentDescription = "لوگوی اپلیکیشن اسکنر"
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        root.addView(logo, LinearLayout.LayoutParams(76, 76).apply { gravity = Gravity.CENTER; bottomMargin = 4 })
+        content.addView(logo, LinearLayout.LayoutParams(76, 76).apply { gravity = Gravity.CENTER; bottomMargin = 4 })
         val title = TextView(this).apply {
             text = "اسکنر | مدیریت انبار"
             textSize = 24f
@@ -167,7 +172,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(0, 8, 0, 14)
         }
-        root.addView(title)
+        content.addView(title)
         countText = TextView(this).apply {
             textSize = 18f
             gravity = Gravity.CENTER
@@ -175,25 +180,25 @@ class MainActivity : Activity() {
             setPadding(8, 12, 8, 12)
             setBackgroundColor(0xFFE4EBDD.toInt())
         }
-        root.addView(countText, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 })
+        content.addView(countText, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 })
         productSpinner = Spinner(this)
         productSpinner.minimumHeight = 204
-        productSpinner.setPadding(16, 20, 16, 20)
-        root.addView(productSpinner, LinearLayout.LayoutParams(-1, 204).apply { bottomMargin = 8 })
+        productSpinner.setPadding(18, 24, 18, 24)
+        content.addView(productSpinner, LinearLayout.LayoutParams(-1, 204).apply { bottomMargin = 12 })
         modeSpinner = Spinner(this)
         modeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("ورود به انبار", "خروج از انبار")).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        modeSpinner.minimumHeight = 68
-        modeSpinner.setPadding(12, 6, 12, 6)
-        root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 12 })
+        modeSpinner.minimumHeight = 80
+        modeSpinner.setPadding(16, 10, 16, 10)
+        content.addView(modeSpinner, LinearLayout.LayoutParams(-1, 80).apply { bottomMargin = 14 })
 
-        addButton(root, "＋ ثبت محصول", 0xFF526B3C.toInt()) { addProductDialog() }
-        addButton(root, "− حذف محصول", 0xFF9B3D36.toInt()) { deleteProductDialog() }
-        addButton(root, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
-        addButton(root, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
-        addButton(root, "▤ خروجی PDF", 0xFF8A6533.toInt()) { exportPdf() }
-        addButton(root, "▦ جدول موجودی و گردش کالا", 0xFF315C73.toInt()) { showInventoryTable() }
+        addButton(content, "＋ ثبت محصول", 0xFF526B3C.toInt()) { addProductDialog() }
+        addButton(content, "− حذف محصول", 0xFF9B3D36.toInt()) { deleteProductDialog() }
+        addButton(content, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
+        addButton(content, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
+        addButton(content, "▤ خروجی PDF", 0xFF8A6533.toInt()) { exportPdf() }
+        addButton(content, "▦ جدول موجودی و گردش کالا", 0xFF315C73.toInt()) { showInventoryTable() }
 
         detailText = TextView(this).apply {
             textSize = 14f
@@ -201,7 +206,7 @@ class MainActivity : Activity() {
             setPadding(4, 12, 4, 4)
             gravity = Gravity.RIGHT
         }
-        root.addView(detailText, LinearLayout.LayoutParams(-1, 0, 1f))
+        content.addView(detailText, LinearLayout.LayoutParams(-1, 0, 1f))
         val note = TextView(this).apply {
             text = "اطلاعات فقط روی همین گوشی ذخیره می‌شود."
             textSize = 12f
@@ -209,7 +214,7 @@ class MainActivity : Activity() {
             setTextColor(0xFF777777.toInt())
             setPadding(0, 8, 0, 0)
         }
-        root.addView(note)
+        content.addView(note)
         feedbackLight = TextView(this).apply {
             text = "آماده اسکن"
             textSize = 15f
@@ -218,15 +223,22 @@ class MainActivity : Activity() {
             setPadding(8, 5, 8, 5)
             setBackgroundColor(0xFF607D8B.toInt())
         }
-        root.addView(feedbackLight, LinearLayout.LayoutParams(-1, 38).apply { topMargin = 6; bottomMargin = 6 })
-        addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt(), 96) { startScan() }
+        content.addView(feedbackLight, LinearLayout.LayoutParams(-1, 38).apply { topMargin = 6; bottomMargin = 6 })
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            clipToPadding = false
+            overScrollMode = ScrollView.OVER_SCROLL_IF_CONTENT_SCROLLS
+        }
+        scroll.addView(content, ViewGroup.LayoutParams(-1, -2))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        addButton(root, "▦\nاسکن بارکد با دوربین", 0xFF176B63.toInt(), 204) { startScan() }
         setContentView(root)
     }
 
     private fun addButton(root: LinearLayout, label: String, color: Int, height: Int = 68, action: () -> Unit) {
         val b = Button(this).apply {
             text = label
-            textSize = 17f
+            textSize = if (height >= 150) 23f else 18f
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             isAllCaps = false
             minHeight = height
@@ -237,7 +249,7 @@ class MainActivity : Activity() {
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(color))
             setOnClickListener { action() }
         }
-        root.addView(b, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = 8 })
+        root.addView(b, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = if (height >= 150) 0 else 10 })
     }
 
     private fun showInventoryTable() {
