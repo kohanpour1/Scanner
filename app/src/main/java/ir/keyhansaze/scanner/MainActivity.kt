@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.*
 import com.google.zxing.integration.android.IntentIntegrator
+import com.journeyapps.barcodescanner.CaptureActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -148,8 +149,12 @@ class MainActivity : Activity() {
         productSpinner = Spinner(this)
         root.addView(productSpinner, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 8 })
         modeSpinner = Spinner(this)
-        modeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("ورود به انبار", "خروج از انبار"))
-        root.addView(modeSpinner, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 12 })
+        modeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("ورود به انبار", "خروج از انبار")).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        modeSpinner.minimumHeight = 60
+        modeSpinner.setPadding(12, 6, 12, 6)
+        root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 12 })
 
         addButton(root, "＋ افزودن نوع محصول (حداکثر ۵)", 0xFF526B3C.toInt()) { addProductDialog() }
         addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
@@ -178,13 +183,17 @@ class MainActivity : Activity() {
     private fun addButton(root: LinearLayout, label: String, color: Int, action: () -> Unit) {
         val b = Button(this).apply {
             text = label
-            textSize = 15f
+            textSize = 16f
             isAllCaps = false
+            minHeight = 60
+            minimumHeight = 60
+            gravity = Gravity.CENTER
+            setPadding(12, 8, 12, 8)
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(color))
             setOnClickListener { action() }
         }
-        root.addView(b, LinearLayout.LayoutParams(-1, 52).apply { bottomMargin = 7 })
+        root.addView(b, LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 8 })
     }
 
     private fun addProductDialog() {
@@ -225,12 +234,17 @@ class MainActivity : Activity() {
     private fun startScan() {
         if (selectedProduct() == null) return
         val integrator = IntentIntegrator(this)
+        integrator.setCaptureActivity(CaptureActivity::class.java)
         integrator.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES)
         integrator.setPrompt(if (isIncoming()) "بارکد کالا را اسکن کنید - ورود" else "بارکد کالا را اسکن کنید - خروج")
         integrator.setBeepEnabled(true)
         integrator.setOrientationLocked(false)
         integrator.setBarcodeImageEnabled(false)
-        integrator.initiateScan()
+        try {
+            integrator.initiateScan()
+        } catch (e: Exception) {
+            toast("باز کردن دوربین اسکن ناموفق بود: " + (e.localizedMessage ?: "خطای ناشناخته"))
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -248,8 +262,13 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         products = db.products()
-        productSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-            if (products.isEmpty()) listOf("ابتدا محصول اضافه کنید") else products.map { it.name })
+        productSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item,
+            if (products.isEmpty()) listOf("ابتدا محصول اضافه کنید") else products.map { it.name }).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        productSpinner.minimumHeight = 60
+        productSpinner.setPadding(12, 6, 12, 6)
+        productSpinner.layoutParams = LinearLayout.LayoutParams(-1, 60).apply { bottomMargin = 8 }
         countText.text = "موجودی کل: ${db.totalCount()} سریال"
         detailText.text = if (products.isEmpty()) {
             "برای شروع، نوع محصول را اضافه کنید.\n\nهر سریال فقط یک‌بار در موجودی ثبت می‌شود و ورود و خروج آن در تاریخچه ذخیره می‌شود."
