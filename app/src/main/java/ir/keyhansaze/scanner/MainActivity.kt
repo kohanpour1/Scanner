@@ -48,7 +48,6 @@ class InventoryDb(context: android.content.Context) :
     fun addProduct(name: String): String? {
         val clean = name.trim()
         if (clean.isEmpty()) return "نام محصول را وارد کنید."
-        if (products().size >= 5) return "حداکثر ۵ نوع محصول قابل تعریف است."
         val values = ContentValues().apply { put("name", clean) }
         return try {
             writableDatabase.insertOrThrow("products", null, values)
@@ -115,6 +114,14 @@ class InventoryDb(context: android.content.Context) :
     }
 
     fun productSummary(): List<Pair<String, Int>> = products().map { it.name to stockCount(it.id) }
+
+    fun movementRows(): List<Array<String>> {
+        val rows = mutableListOf<Array<String>>()
+        readableDatabase.rawQuery("SELECT p.name, m.action, m.at, m.code FROM movements m JOIN products p ON p.id=m.product_id ORDER BY m.id DESC", null).use { c ->
+            while (c.moveToNext()) rows.add(arrayOf(c.getString(0) ?: "", if (c.getString(1) == "IN") "ورود" else "خروج", c.getString(2) ?: "", c.getString(3) ?: ""))
+        }
+        return rows
+    }
 }
 
 class MainActivity : Activity() {
@@ -166,12 +173,13 @@ class MainActivity : Activity() {
         modeSpinner.setPadding(12, 6, 12, 6)
         root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 12 })
 
-        addButton(root, "＋ افزودن نوع محصول (حداکثر ۵)", 0xFF526B3C.toInt()) { addProductDialog() }
+        addButton(root, "＋ ثبت محصول", 0xFF526B3C.toInt()) { addProductDialog() }
         addButton(root, "− حذف محصول", 0xFF9B3D36.toInt()) { deleteProductDialog() }
         addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
         addButton(root, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
         addButton(root, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
         addButton(root, "▤ خروجی PDF", 0xFF8A6533.toInt()) { exportPdf() }
+        addButton(root, "▦ جدول موجودی و گردش کالا", 0xFF315C73.toInt()) { showInventoryTable() }
 
         detailText = TextView(this).apply {
             textSize = 14f
@@ -206,6 +214,41 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
         }
         root.addView(b, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 8 })
+    }
+
+    private fun showInventoryTable() {
+        val movements = db.movementRows()
+        val serials = db.serialRows()
+        val scroll = ScrollView(this)
+        val table = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12, 8, 12, 8)
+            layoutDirection = ViewGroup.LAYOUT_DIRECTION_RTL
+        }
+        scroll.addView(table)
+        fun cell(value: String, bold: Boolean = false): TextView = TextView(this).apply {
+            text = value
+            textSize = 13f
+            setTextColor(0xFF202820.toInt())
+            if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(8, 10, 8, 10)
+        }
+        fun row(values: List<String>, header: Boolean = false) {
+            val line = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setBackgroundColor(if (header) 0xFFDCE8D8.toInt() else 0xFFFFFFFF.toInt())
+            }
+            values.forEach { value -> line.addView(cell(value, header), LinearLayout.LayoutParams(0, -2, 1f)) }
+            table.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 1 })
+        }
+        table.addView(cell("گردش ورود و خروج کالا", true))
+        row(listOf("محصول", "عملیات", "تاریخ و ساعت", "سریال"), true)
+        if (movements.isEmpty()) row(listOf("—", "گردشی ثبت نشده", "—", "—")) else movements.forEach { row(it.toList()) }
+        table.addView(cell("وضعیت موجودی هر سریال", true))
+        row(listOf("محصول", "سریال", "وضعیت", "زمان ثبت ورود"), true)
+        if (serials.isEmpty()) row(listOf("—", "سریالی ثبت نشده", "—", "—")) else serials.forEach { row(listOf(it[0], it[1], it[2], it[3])) }
+        AlertDialog.Builder(this).setTitle("جدول موجودی و خروجی").setView(scroll).setPositiveButton("بستن", null).show()
     }
 
     private fun addProductDialog() {
