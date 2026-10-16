@@ -18,6 +18,8 @@ import com.google.zxing.integration.android.IntentIntegrator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 data class Product(val id: Int, val name: String)
 
@@ -152,7 +154,7 @@ class MainActivity : Activity() {
         addButton(root, "＋ افزودن نوع محصول (حداکثر ۵)", 0xFF526B3C.toInt()) { addProductDialog() }
         addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
         addButton(root, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
-        addButton(root, "⇩ خروجی Excel (CSV)", 0xFF5C6B45.toInt()) { exportCsv() }
+        addButton(root, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
         addButton(root, "▤ خروجی PDF", 0xFF8A6533.toInt()) { exportPdf() }
 
         detailText = TextView(this).apply {
@@ -257,36 +259,86 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun exportCsv() {
+    private fun exportXlsx() {
         val rows = db.serialRows()
         val summary = db.productSummary()
-        val name = "Scanner_inventory_${System.currentTimeMillis()}.csv"
+        val name = "Scanner_inventory_${System.currentTimeMillis()}.xlsx"
         try {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: throw Exception("امکان ساخت فایل وجود ندارد")
-            contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { w ->
-                w.write("\uFEFFمحصول,سریال,وضعیت,تاریخ ثبت,آخرین تغییر\r\n")
-                rows.forEach { row -> w.write(row.joinToString(",") { csvEscape(it) } + "\r\n") }
-                w.write("\r\nخلاصه موجودی\r\nمحصول,تعداد موجود\r\n")
-                summary.forEach { w.write(csvEscape(it.first) + "," + it.second + "\r\n") }
+            contentResolver.openOutputStream(uri)?.use { output ->
+                ZipOutputStream(output).use { zip ->
+                    fun entry(path: String, content: String) {
+                        zip.putNextEntry(ZipEntry(path))
+                        zip.write(content.toByteArray(Charsets.UTF_8))
+                        zip.closeEntry()
+                    }
+                    entry("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""")
+                    entry("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""")
+                    entry("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="گزارش انبار" sheetId="1" r:id="rId1"/></sheets></workbook>""")
+                    entry("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""")
+                    val table = mutableListOf<List<String>>()
+                    table.add(listOf("محصول", "سریال", "وضعیت", "تاریخ ثبت", "آخرین تغییر"))
+                    rows.forEach { table.add(it.toList()) }
+                    table.add(listOf("", "", "", "", ""))
+                    table.add(listOf("خلاصه موجودی", "تعداد موجود"))
+                    summary.forEach { table.add(listOf(it.first, it.second.toString())) }
+                    fun colName(n: Int): String {
+                        var x = n
+                        var result = ""
+                        while (x > 0) {
+                            val rem = (x - 1) % 26
+                            result = ('A'.code + rem).toChar() + result
+                            x = (x - 1) / 26
+                        }
+                        return result
+                    }
+                    fun xmlEscape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+                    val sheet = StringBuilder("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
+                    table.forEachIndexed { ri, row ->
+                        val rowNum = ri + 1
+                        sheet.append("<row r=\"").append(rowNum).append("\">")
+                        row.forEachIndexed { ci, value ->
+                            val ref = colName(ci + 1) + rowNum
+                            sheet.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">")
+                                .append(xmlEscape(value)).append("</t></is></c>")
+                        }
+                        sheet.append("</row>")
+                    }
+                    sheet.append("</sheetData></worksheet>")
+                    entry("xl/worksheets/sheet1.xml", sheet.toString())
+                }
             }
-            toast("فایل Excel-compatible در پوشه Downloads ذخیره شد.")
-            openFile(uri, "text/csv")
-        } catch (e: Exception) { toast("خطا در خروجی: ${e.message}") }
+            toast("فایل Excel در پوشه Downloads ذخیره شد.")
+            openFile(uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        } catch (e: Exception) { toast("خطا در خروجی Excel: ${e.message}") }
     }
-
-    private fun csvEscape(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
 
     private fun exportPdf() {
         val doc = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-        val page = doc.startPage(pageInfo)
-        val canvas = page.canvas
+        var page = doc.startPage(pageInfo)
+        var canvas = page.canvas
         val paint = Paint().apply { textSize = 14f; color = 0xFF202020.toInt(); textAlign = Paint.Align.RIGHT }
         var y = 42f
         canvas.drawText("گزارش موجودی انبار Scanner", 560f, y, paint); y += 28
@@ -296,14 +348,16 @@ class MainActivity : Activity() {
         }
         y += 10
         canvas.drawText("فهرست سریال‌ها (موجود و خارج‌شده)", 560f, y, paint); y += 24
-        val allRows = db.serialRows()
-        allRows.take(35).forEach { row ->
+        db.serialRows().forEach { row ->
+            if (y > 800) {
+                doc.finishPage(page)
+                page = doc.startPage(pageInfo)
+                canvas = page.canvas
+                y = 42f
+                canvas.drawText("ادامه فهرست سریال‌ها", 560f, y, paint); y += 28
+            }
             canvas.drawText("${row[0]} | ${row[1]} | ${row[2]}", 560f, y, paint)
             y += 18
-        }
-        if (allRows.size > 35) {
-            y += 8
-            canvas.drawText("برای مشاهده همه ${allRows.size} سریال، فایل CSV را باز کنید.", 560f, y, paint)
         }
         doc.finishPage(page)
         val name = "Scanner_report_${System.currentTimeMillis()}.pdf"
