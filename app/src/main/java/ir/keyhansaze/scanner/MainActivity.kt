@@ -296,15 +296,14 @@ class MainActivity : Activity() {
         }
         y += 10
         canvas.drawText("فهرست سریال‌ها (موجود و خارج‌شده)", 560f, y, paint); y += 24
-        db.serialRows().forEach { row ->
-            if (y > 800) {
-                doc.finishPage(page)
-                toast("برای گزارش بسیار طولانی، خروجی CSV کامل‌تر است.")
-                y = 42f
-                return@forEach
-            }
+        val allRows = db.serialRows()
+        allRows.take(35).forEach { row ->
             canvas.drawText("${row[0]} | ${row[1]} | ${row[2]}", 560f, y, paint)
             y += 18
+        }
+        if (allRows.size > 35) {
+            y += 8
+            canvas.drawText("برای مشاهده همه ${allRows.size} سریال، فایل CSV را باز کنید.", 560f, y, paint)
         }
         doc.finishPage(page)
         val name = "Scanner_report_${System.currentTimeMillis()}.pdf"
