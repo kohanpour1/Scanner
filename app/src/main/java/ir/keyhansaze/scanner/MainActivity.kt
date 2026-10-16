@@ -188,7 +188,7 @@ class MainActivity : Activity() {
     }
 
     private fun addProductDialog() {
-        val input = EditText(this).apply { hint = "مثلاً دستگاه مدل A"; singleLine = true }
+        val input = EditText(this).apply { hint = "مثلاً دستگاه مدل A"; setSingleLine(true) }
         AlertDialog.Builder(this).setTitle("تعریف نوع محصول").setView(input)
             .setNegativeButton("انصراف", null)
             .setPositiveButton("ذخیره") { _, _ ->
@@ -211,7 +211,7 @@ class MainActivity : Activity() {
         val product = selectedProduct() ?: return
         val input = EditText(this).apply {
             hint = "سریال یا شماره بارکد"
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT
         }
         AlertDialog.Builder(this).setTitle(if (isIncoming()) "ثبت دستی ورود" else "ثبت دستی خروج")
