@@ -86,6 +86,16 @@ class InventoryDb(context: android.content.Context) :
         return if (incoming) "ورود کالا ثبت شد." else "خروج کالا ثبت شد."
     }
 
+    fun deleteProduct(productId: Int): String? {
+        val hasSerials = readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM serials WHERE product_id=?",
+            arrayOf(productId.toString())
+        ).use { it.moveToFirst() && it.getInt(0) > 0 }
+        if (hasSerials) return "برای این محصول سابقه سریال ثبت شده است؛ برای حفظ سوابق، حذف آن مجاز نیست."
+        writableDatabase.delete("products", "id=?", arrayOf(productId.toString()))
+        return null
+    }
+
     fun stockCount(productId: Int): Int =
         readableDatabase.rawQuery("SELECT COUNT(*) FROM serials WHERE product_id=? AND status='IN'", arrayOf(productId.toString())).use {
             if (it.moveToFirst()) it.getInt(0) else 0
@@ -157,6 +167,7 @@ class MainActivity : Activity() {
         root.addView(modeSpinner, LinearLayout.LayoutParams(-1, 68).apply { bottomMargin = 12 })
 
         addButton(root, "＋ افزودن نوع محصول (حداکثر ۵)", 0xFF526B3C.toInt()) { addProductDialog() }
+        addButton(root, "− حذف محصول", 0xFF9B3D36.toInt()) { deleteProductDialog() }
         addButton(root, "▦ اسکن بارکد با دوربین", 0xFF176B63.toInt()) { startScan() }
         addButton(root, "＋ ثبت دستی سریال", 0xFF47627B.toInt()) { manualEntryDialog() }
         addButton(root, "⇩ خروجی Excel (XLSX)", 0xFF5C6B45.toInt()) { exportXlsx() }
@@ -205,6 +216,33 @@ class MainActivity : Activity() {
                 val error = db.addProduct(input.text.toString())
                 if (error != null) toast(error) else { toast("محصول ثبت شد."); refresh() }
             }.show()
+    }
+
+    private fun deleteProductDialog() {
+        if (products.isEmpty()) {
+            toast("محصولی برای حذف وجود ندارد.")
+            return
+        }
+        val names = products.map { it.name }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("انتخاب محصول برای حذف")
+            .setItems(names) { _, which ->
+                val product = products[which]
+                AlertDialog.Builder(this)
+                    .setTitle("حذف محصول انتخاب‌شده؟")
+                    .setMessage("محصول فقط در صورتی حذف می‌شود که هیچ سریالی برای آن ثبت نشده باشد.")
+                    .setNegativeButton("انصراف", null)
+                    .setPositiveButton("حذف") { _, _ ->
+                        val error = db.deleteProduct(product.id)
+                        if (error != null) toast(error) else {
+                            toast("محصول حذف شد.")
+                            refresh()
+                        }
+                    }
+                    .show()
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
     }
 
     private fun selectedProduct(): Product? {
