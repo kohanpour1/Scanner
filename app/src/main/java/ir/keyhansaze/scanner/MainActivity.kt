@@ -137,6 +137,8 @@ class MainActivity : Activity() {
     private lateinit var feedbackLight: TextView
     private var toneGenerator: ToneGenerator? = null
     private var products: List<Product> = emptyList()
+    private var scanProductId: Int? = null
+    private var scanIncoming: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -231,14 +233,14 @@ class MainActivity : Activity() {
         }
         scroll.addView(content, ViewGroup.LayoutParams(-1, -2))
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        addButton(root, "▦\nاسکن بارکد با دوربین", 0xFF176B63.toInt(), 204) { startScan() }
+        addButton(root, "▦\nاسکن بارکد با دوربین", 0xFF176B63.toInt(), 240) { startScan() }
         setContentView(root)
     }
 
     private fun addButton(root: LinearLayout, label: String, color: Int, height: Int = 68, action: () -> Unit) {
         val b = Button(this).apply {
             text = label
-            textSize = if (height >= 150) 23f else 18f
+            textSize = if (height >= 150) 25f else 18f
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             isAllCaps = false
             minHeight = height
@@ -249,7 +251,7 @@ class MainActivity : Activity() {
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(color))
             setOnClickListener { action() }
         }
-        root.addView(b, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = if (height >= 150) 0 else 10 })
+        root.addView(b, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = if (height >= 150) 18 else 10 })
     }
 
     private fun showInventoryTable() {
@@ -351,12 +353,15 @@ class MainActivity : Activity() {
 
     private fun startScan() {
         if (selectedProduct() == null) return
+        val product = selectedProduct() ?: return
+        scanProductId = product.id
+        scanIncoming = isIncoming()
         val integrator = IntentIntegrator(this)
-        integrator.setCaptureActivity(CaptureActivity::class.java)
+        integrator.setCaptureActivity(ScannerCaptureActivity::class.java)
         integrator.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES)
         integrator.setPrompt(if (isIncoming()) "بارکد کالا را اسکن کنید - ورود" else "بارکد کالا را اسکن کنید - خروج")
         integrator.setBeepEnabled(true)
-        integrator.setOrientationLocked(false)
+        integrator.setOrientationLocked(true)
         integrator.setBarcodeImageEnabled(false)
         try {
             integrator.initiateScan()
@@ -369,8 +374,8 @@ class MainActivity : Activity() {
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null) {
             if (result.contents != null) {
-                val p = selectedProduct()
-                if (p != null) showRecordFeedback(db.record(p.id, result.contents, isIncoming()))
+                val pId = scanProductId
+                if (pId != null) showRecordFeedback(db.record(pId, result.contents, scanIncoming))
                 refresh()
             }
             return
@@ -382,7 +387,14 @@ class MainActivity : Activity() {
         val success = message == "ورود کالا ثبت شد." || message == "خروج کالا ثبت شد."
         feedbackLight.text = if (success) "✓ ثبت موفق" else "✕ خطا: $message"
         feedbackLight.setBackgroundColor(if (success) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
-        toneGenerator?.startTone(if (success) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 250)
+        if (success && message == "ورود کالا ثبت شد.") {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 180)
+        } else if (success) {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 180)
+        } else {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 120)
+            Handler(Looper.getMainLooper()).postDelayed({ toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 120) }, 190)
+        }
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         Handler(Looper.getMainLooper()).postDelayed({
             if (::feedbackLight.isInitialized) {
@@ -393,10 +405,15 @@ class MainActivity : Activity() {
     }
 
     private fun refresh() {
+        val previouslySelectedId = if (::productSpinner.isInitialized && products.indices.contains(productSpinner.selectedItemPosition)) products[productSpinner.selectedItemPosition].id else null
         products = db.products()
         productSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item,
             if (products.isEmpty()) listOf("ابتدا محصول اضافه کنید") else products.map { it.name }).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        if (previouslySelectedId != null) {
+            val preservedPosition = products.indexOfFirst { it.id == previouslySelectedId }
+            if (preservedPosition >= 0) productSpinner.setSelection(preservedPosition)
         }
         productSpinner.minimumHeight = 204
         productSpinner.setPadding(16, 20, 16, 20)
@@ -413,6 +430,9 @@ class MainActivity : Activity() {
     private fun exportXlsx() {
         val rows = db.serialRows()
         val summary = db.productSummary()
+        val allSerialRows = db.serialRows()
+        val outgoingSummary = products.map { product -> product.name to allSerialRows.count { it[0] == product.name && it[2] == "خارج‌شده" } }
+        val outgoingRows = db.movementRows().filter { it[1] == "خروج" }
         val name = "Scanner_inventory_${System.currentTimeMillis()}.xlsx"
         try {
             val values = ContentValues().apply {
@@ -435,6 +455,7 @@ class MainActivity : Activity() {
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 </Types>""")
                     entry("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -442,10 +463,11 @@ class MainActivity : Activity() {
 </Relationships>""")
                     entry("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="گزارش انبار" sheetId="1" r:id="rId1"/></sheets></workbook>""")
+<sheets><sheet name="گزارش انبار" sheetId="1" r:id="rId1"/><sheet name="خلاصه خروجی" sheetId="2" r:id="rId2"/></sheets></workbook>""")
                     entry("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
 </Relationships>""")
                     val table = mutableListOf<List<String>>()
                     table.add(listOf("محصول", "سریال", "وضعیت", "تاریخ ثبت", "آخرین تغییر"))
@@ -478,6 +500,25 @@ class MainActivity : Activity() {
                     }
                     sheet.append("</sheetData></worksheet>")
                     entry("xl/worksheets/sheet1.xml", sheet.toString())
+                    val outTable = mutableListOf<List<String>>()
+                    outTable.add(listOf("خلاصه خروجی کالا", "تعداد سریال خارج‌شده"))
+                    outgoingSummary.forEach { outTable.add(listOf(it.first, it.second.toString())) }
+                    outTable.add(listOf("", ""))
+                    outTable.add(listOf("جزئیات خروجی‌ها", "عملیات", "تاریخ و ساعت", "سریال"))
+                    outgoingRows.forEach { outTable.add(listOf(it[0], it[1], it[2], it[3])) }
+                    val outSheet = StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>")
+                    outTable.forEachIndexed { ri, row ->
+                        val rowNum = ri + 1
+                        outSheet.append("<row r=\"").append(rowNum).append("\">")
+                        row.forEachIndexed { ci, value ->
+                            val ref = colName(ci + 1) + rowNum
+                            outSheet.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">")
+                                .append(xmlEscape(value)).append("</t></is></c>")
+                        }
+                        outSheet.append("</row>")
+                    }
+                    outSheet.append("</sheetData></worksheet>")
+                    entry("xl/worksheets/sheet2.xml", outSheet.toString())
                 }
             }
             toast("فایل Excel در پوشه Downloads ذخیره شد.")
