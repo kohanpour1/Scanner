@@ -8,7 +8,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
-            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:name="ir.keyhansaze.scanner.ScannerCaptureActivity"
             android:clearTaskOnLaunch="true"
             android:stateNotNeeded="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
