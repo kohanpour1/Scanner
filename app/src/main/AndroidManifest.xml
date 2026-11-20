@@ -3,8 +3,9 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:icon="@drawable/scanner_logo"
+        android:roundIcon="@drawable/scanner_logo"
         android:allowBackup="true"
-        android:label="مدیریت انبار Scanner"
+        android:label="سهمیه آرد"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
@@ -14,7 +15,8 @@
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity
             android:name="ir.keyhansaze.scanner.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
